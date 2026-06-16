@@ -1,0 +1,66 @@
+name: PR Quality Checks
+
+on:
+  pull_request:
+    branches: [ main, master, dev ]
+  workflow_dispatch:
+
+jobs:
+  quality:
+    name: Code Quality & Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Check Dart Formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze Code (Strict)
+        run: flutter analyze
+
+      - name: Run Tests with Coverage
+        run: flutter test --coverage --reporter=expanded
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage/lcov.info
+          fail_ci_if_error: false
+
+  e2e-dry-run:
+    name: E2E Config Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install NPM Dependencies
+        run: npm install
+
+      - name: Validate E2E Test Config
+        run: |
+          echo "Validating package.json test scripts..."
+          node -e "const p = require('./package.json'); console.log('Scripts:', JSON.stringify(p.scripts, null, 2));"
+          echo "Checking e2e test files exist..."
+          ls -la e2e/tests/
+          ls -la e2e/pages/
+          echo "E2E config validation passed!"
