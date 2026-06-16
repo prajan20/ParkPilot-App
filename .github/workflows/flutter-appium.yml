@@ -1,0 +1,117 @@
+name: ParkPilot Appium E2E Automation
+
+on:
+  push:
+    branches: [ main, master, dev ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  e2e-testing:
+    runs-on: macos-13  # macOS runners support virtualization out of the box, ensuring fast Android Emulator startup
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install System Image and Create Emulator
+        run: |
+          sdkmanager --install "system-images;android-33;google_apis;x86_64"
+          echo "no" | avdmanager create avd -n TestDevice -k "system-images;android-33;google_apis;x86_64" --force
+
+      - name: Start Android Emulator
+        run: |
+          echo "Starting emulator..."
+          ${ANDROID_HOME}/emulator/emulator -avd TestDevice -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect &
+          
+          # Wait for emulator boot to complete
+          adb wait-for-device
+          OUT=$(adb shell getprop sys.boot_completed | tr -d '\r')
+          while [ "$OUT" != "1" ]; do
+            echo "Waiting for emulator boot..."
+            sleep 5
+            OUT=$(adb shell getprop sys.boot_completed | tr -d '\r')
+          done
+          echo "Emulator booted successfully!"
+          adb shell settings put global window_animation_scale 0.0
+          adb shell settings put global transition_animation_scale 0.0
+          adb shell settings put global animator_duration_scale 0.0
+          adb devices -l
+
+      - name: Install Appium 2.x and Drivers
+        run: |
+          npm install -g appium@next
+          appium driver install uiautomator2
+          appium driver install --source=npm appium-flutter-driver
+          appium -v
+          # Start Appium Server in the background
+          appium --log-level info --port 4723 --allow-cors &
+          sleep 10
+          curl -I http://127.0.0.1:4723/ || true
+
+      - name: Install NPM Dependencies
+        run: |
+          npm install
+
+      - name: Compile/Prepare APK and Build Directories
+        run: |
+          mkdir -p app
+          # In a real pipeline, you would build the Flutter APK:
+          # flutter build apk --debug (to enable Observatory VM) or --release
+          # Here we copy the prebuilt APK or assume it exists in f:\parkpilot\build\app\outputs\flutter-apk\app-release.apk
+          if [ -f "./build/app/outputs/flutter-apk/app-release.apk" ]; then
+            cp ./build/app/outputs/flutter-apk/app-release.apk ./app/app-release.apk
+          elif [ -f "./build/app/outputs/apk/release/app-release.apk" ]; then
+            cp ./build/app/outputs/apk/release/app-release.apk ./app/app-release.apk
+          else
+            echo "Warning: Prebuilt APK not found. Ensure APK is built or committed in ./app/app-release.apk"
+          fi
+
+      - name: Install APK on Emulator
+        run: |
+          if [ -f "./app/app-release.apk" ]; then
+            adb install ./app/app-release.apk
+          else
+            echo "APK not found at ./app/app-release.apk. Skipping pre-installation."
+          fi
+
+      - name: Run E2E Automation Tests
+        run: |
+          npm run test:all
+        env:
+          DRIVER_TYPE: uiautomator2 # or flutter if using debug APK
+          APK_PATH: ./app/app-release.apk
+          APP_PACKAGE: com.company.app
+          APP_ACTIVITY: com.company.app.MainActivity
+
+      - name: Generate Reports Summary
+        if: always()
+        run: |
+          echo "Test execution complete. Formatting summaries."
+
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: parkpilot-automation-reports
+          path: |
+            reports/Flutter_E2E_Report.xlsx
+            reports/index.html
+            reports/failures/
+            reports/execution.log

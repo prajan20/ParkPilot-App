@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "184402308704",
+    "project_id": "parkpilot-fe717",
+    "storage_bucket": "parkpilot-fe717.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:184402308704:android:6d4ed01f6d9f7582f61d05",
+        "android_client_info": {
+          "package_name": "com.example.parkpilot"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBHRvmNyg-rYK_ftb-8P4KLOdeR8jwMbA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
